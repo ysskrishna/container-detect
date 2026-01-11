@@ -228,3 +228,91 @@ def test_returns_false_on_non_linux_platforms():
     with mock.patch("sys.platform", "win32"):  # Windows
         assert is_inside_container(force_refresh=True) is False
         assert is_inside_container() is False
+
+
+def test_caching_works_correctly():
+    """Test that caching works correctly - subsequent calls use cache."""
+    stat_call_count = 0
+    read_call_count = 0
+
+    def path_constructor(*args, **kwargs):
+        path_str = str(args[0]) if args else ""
+        mock_path = mock.MagicMock(spec=Path)
+        mock_path.__str__ = mock.Mock(return_value=path_str)
+
+        def exists():
+            nonlocal stat_call_count
+            stat_call_count += 1
+            return False
+
+        def file_open(path, mode="rt"):
+            nonlocal read_call_count
+            read_call_count += 1
+            if path == "/proc/self/cgroup":
+                return mock.mock_open(read_data="xxx docker yyyy")(path, mode)
+            raise FileNotFoundError()
+
+        mock_path.exists = mock.Mock(side_effect=exists)
+        return mock_path
+
+    with mock.patch("sys.platform", "linux"), \
+         mock.patch("container_detect.core.Path", side_effect=path_constructor), \
+         mock.patch("builtins.open", side_effect=file_open), \
+         mock.patch.dict(os.environ, {}, clear=True):
+        # First call - force refresh to start fresh
+        assert is_inside_container(force_refresh=True) is True
+        assert stat_call_count >= 1
+        assert read_call_count >= 1
+
+        # Second call - should use cache
+        assert is_inside_container() is True
+        initial_stat_count = stat_call_count
+        initial_read_count = read_call_count
+
+        # Third call - should still use cache
+        assert is_inside_container() is True
+        assert stat_call_count == initial_stat_count  # Should not increase
+        assert read_call_count == initial_read_count  # Should not increase
+
+
+def test_force_refresh_clears_cache_and_rechecks():
+    """Test that force_refresh=True actually clears cache and re-runs the check."""
+    from container_detect.core import _is_inside_container_cached
+
+    check_count = 0
+
+    def path_constructor(*args, **kwargs):
+        path_str = str(args[0]) if args else ""
+        mock_path = mock.MagicMock(spec=Path)
+        mock_path.__str__ = mock.Mock(return_value=path_str)
+
+        def exists():
+            nonlocal check_count
+            check_count += 1
+            return (path_str == "/.dockerenv")
+
+        mock_path.exists = mock.Mock(side_effect=exists)
+        return mock_path
+
+    with mock.patch("sys.platform", "linux"), \
+         mock.patch("container_detect.core.Path", side_effect=path_constructor), \
+         mock.patch("builtins.open", side_effect=FileNotFoundError()), \
+         mock.patch.dict(os.environ, {}, clear=True):
+        # Clear any existing cache first
+        _is_inside_container_cached.cache_clear()
+
+        # First call - should check
+        assert is_inside_container() is True
+        assert check_count == 1
+
+        # Second call - should use cache
+        assert is_inside_container() is True
+        assert check_count == 1  # Should not increase
+
+        # Third call with force_refresh - should clear cache and re-check
+        assert is_inside_container(force_refresh=True) is True
+        assert check_count == 2  # Should increase
+
+        # Fourth call - should use cache again
+        assert is_inside_container() is True
+        assert check_count == 2  # Should not increase

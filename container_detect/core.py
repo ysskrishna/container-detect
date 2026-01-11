@@ -4,6 +4,78 @@ from pathlib import Path
 import sys
 
 
+# Container detection file paths
+_CONTAINER_ENV_FILES = [
+    "/.dockerenv",  # Docker classic, some Podman
+    "/.containerenv",  # Podman
+    "/run/.containerenv",  # Podman alternative location
+]
+
+# Cgroup file paths to check
+_CGROUP_FILES = ["/proc/self/cgroup", "/proc/1/cgroup"]
+
+# Keywords to search for in cgroup files
+_CGROUP_KEYWORDS = (
+    "docker",
+    "kubepods",
+    "kubelet",
+    "containerd",
+    "podman",
+    "libpod",
+    "cri-o",
+    "lxc",
+    "garden",
+)
+
+# Keywords to search for in mountinfo
+_MOUNTINFO_KEYWORDS = ("docker", "kubelet", "containerd", "podman")
+
+# Environment variables that indicate container execution
+_CONTAINER_ENV_VARS = (
+    "KUBERNETES_SERVICE_HOST",  # Kubernetes
+    "KUBERNETES_PORT",  # Kubernetes
+    "container",  # systemd-based containers
+    "DOCKER_CONTAINER",  # Sometimes set
+    "PODMAN_CONTAINER",  # Podman
+    "ECS_CONTAINER_METADATA_URI",  # AWS ECS
+)
+
+
+def _check_container_files() -> bool:
+    """Check for container-specific environment files."""
+    return any(Path(f).exists() for f in _CONTAINER_ENV_FILES)
+
+
+def _check_cgroup_files() -> bool:
+    """Check cgroup files for container indicators."""
+    for cgroup_file in _CGROUP_FILES:
+        try:
+            with open(cgroup_file, "rt") as f:
+                content = f.read().lower()
+                if any(keyword in content for keyword in _CGROUP_KEYWORDS):
+                    return True
+        except (FileNotFoundError, PermissionError, OSError):
+            continue
+    return False
+
+
+def _check_mountinfo() -> bool:
+    """Check mountinfo for container filesystem patterns."""
+    try:
+        with open("/proc/self/mountinfo", "rt") as f:
+            content = f.read()
+            if any(keyword in content for keyword in _MOUNTINFO_KEYWORDS):
+                return True
+    except (FileNotFoundError, PermissionError, OSError):
+        pass
+    return False
+
+
+def _check_environment_variables() -> bool:
+    """Check environment variables for container indicators."""
+    return any(var in os.environ for var in _CONTAINER_ENV_VARS)
+
+
 @lru_cache(maxsize=1)
 def _is_inside_container_cached() -> bool:
     """
@@ -15,60 +87,17 @@ def _is_inside_container_cached() -> bool:
     if not sys.platform.startswith("linux"):
         return False
 
-    # 1. Check for /.dockerenv (Docker classic, some Podman)
-    if Path("/.dockerenv").exists():
+    # Check detection methods in order
+    if _check_container_files():
         return True
 
-    # 2. Check for container-specific files
-    container_files = [
-        "/.containerenv",  # Podman
-        "/run/.containerenv",  # Podman alternative location
-    ]
-    if any(Path(f).exists() for f in container_files):
+    if _check_cgroup_files():
         return True
 
-    # 3. Check cgroup (works for Docker, Kubernetes, containerd, Podman, LXC)
-    cgroup_files = ["/proc/self/cgroup", "/proc/1/cgroup"]
-    keywords = (
-        "docker",
-        "kubepods",
-        "kubelet",
-        "containerd",
-        "podman",
-        "libpod",
-        "cri-o",
-        "lxc",
-        "garden",
-    )
+    if _check_mountinfo():
+        return True
 
-    for cgroup_file in cgroup_files:
-        try:
-            with open(cgroup_file, "rt") as f:
-                content = f.read()
-                if any(k in content.lower() for k in keywords):
-                    return True
-        except (FileNotFoundError, PermissionError, OSError):
-            continue
-
-    # 4. Check mountinfo for container filesystem patterns
-    try:
-        with open("/proc/self/mountinfo", "rt") as f:
-            content = f.read()
-            if any(k in content for k in ("docker", "kubelet", "containerd", "podman")):
-                return True
-    except (FileNotFoundError, PermissionError, OSError):
-        pass
-
-    # 5. Environment variables commonly set in containers
-    container_env_vars = (
-        "KUBERNETES_SERVICE_HOST",  # Kubernetes
-        "KUBERNETES_PORT",  # Kubernetes
-        "container",  # systemd-based containers
-        "DOCKER_CONTAINER",  # Sometimes set
-        "PODMAN_CONTAINER",  # Podman
-        "ECS_CONTAINER_METADATA_URI",  # AWS ECS
-    )
-    if any(var in os.environ for var in container_env_vars):
+    if _check_environment_variables():
         return True
 
     return False
