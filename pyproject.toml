@@ -1,6 +1,6 @@
 [project]
 name = "container-detect"
-version = "0.1.0"
+version = "1.0.0"
 description = "Detect if your Python process is running inside a container. Supports Docker, Podman, Kubernetes, containerd, LXC, and more. Inspired by the popular is-inside-container npm package. Supports cached results with optional refresh."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -17,7 +17,7 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "License :: OSI Approved :: MIT License",
   "Operating System :: POSIX :: Linux",
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Topic :: System :: Systems Administration",
