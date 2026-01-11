@@ -6,7 +6,7 @@
 [![PyPI](https://img.shields.io/pypi/v/container-detect)](https://pypi.org/project/container-detect/)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/container-detect?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=BLUE&left_text=downloads)](https://pepy.tech/projects/container-detect)
 
-Detect if your Python process is running inside a container. Supports Docker, Podman, Kubernetes, containerd, LXC, and more. Inspired by the popular [is-inside-container](https://github.com/watson/is-inside-container) npm package. Supports cached results with optional refresh.
+Detect if your Python process is running inside a container. Supports Docker, Podman, Kubernetes, containerd, LXC, and more. Inspired by the popular [is-inside-container](https://github.com/sindresorhus/is-inside-container) npm package. Supports cached results with optional refresh.
 
 ## Features
 
@@ -66,59 +66,11 @@ is_inside_container()  # Fast, uses cache
 is_inside_container(force_refresh=True)  # Performs new detection
 ```
 
-## API Documentation
 
-### `is_inside_container(force_refresh: bool = False) -> bool`
-
-Return `True` if the current process is running inside a container.
-
-**Parameters:**
-- `force_refresh` (bool, optional): If `True`, bypass the cache and perform a fresh check. Defaults to `False`.
-
-**Returns:**
-- `bool`: `True` if running inside a container, `False` otherwise.
-
-**Platform Support:**
-- Linux: Full support with multiple detection methods
-- macOS/Windows: Returns `False` (container detection is Linux-specific)
-
-**Detection Methods:**
-
-The function uses multiple detection methods in order:
-
-1. **Container environment files**: Checks for `/.dockerenv`, `/.containerenv`, `/run/.containerenv`
-2. **Cgroup files**: Checks `/proc/self/cgroup` and `/proc/1/cgroup` for container keywords
-3. **Mountinfo**: Checks `/proc/self/mountinfo` for container filesystem patterns
-4. **Environment variables**: Checks for container-related environment variables
-
-**Examples:**
-
-```python
-from container_detect import is_inside_container
-
-# Basic usage
-if is_inside_container():
-    print("Inside container")
-
-# Force refresh (useful if container state might have changed)
-if is_inside_container(force_refresh=True):
-    print("Inside container (fresh check)")
-```
-
-## How It Works
-
-The detection uses multiple methods to ensure reliability:
-
-1. **File-based detection**: Checks for container-specific files like `/.dockerenv`
-2. **Cgroup analysis**: Examines cgroup files for container runtime indicators
-3. **Mount point inspection**: Looks for container-specific mount patterns
-4. **Environment variable detection**: Checks for container-related environment variables
-
-Results are cached using `functools.lru_cache` for performance, with an option to force a fresh check when needed.
 
 ## Credits
 
-This package is inspired by the [is-inside-container](https://github.com/watson/is-inside-container) npm package by [Thomas Watson](https://github.com/watson).
+This package is inspired by the [is-inside-container](https://github.com/sindresorhus/is-inside-container) ([npm](https://www.npmjs.com/package/is-inside-container)) npm package by [Sindre Sorhus](https://github.com/sindresorhus).
 
 ## Changelog
 
@@ -126,7 +78,7 @@ See [CHANGELOG.md](https://github.com/ysskrishna/container-detect/blob/main/CHAN
 
 ## Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct, development setup, and the process for submitting pull requests.
+Contributions are welcome! Please read our [Contributing Guide](https://github.com/ysskrishna/container-detect/blob/main/CONTRIBUTING.md) for details on our code of conduct, development setup, and the process for submitting pull requests.
 
 ## Support
 
