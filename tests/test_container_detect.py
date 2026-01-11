@@ -316,3 +316,224 @@ def test_force_refresh_clears_cache_and_rechecks():
         # Fourth call - should use cache again
         assert is_inside_container() is True
         assert check_count == 2  # Should not increase
+
+
+def test_handles_permission_error_gracefully():
+    """Test that PermissionError is handled gracefully when reading files."""
+    def path_constructor(*args, **kwargs):
+        path_str = str(args[0]) if args else ""
+        mock_path = mock.MagicMock(spec=Path)
+        mock_path.__str__ = mock.Mock(return_value=path_str)
+        mock_path.exists = mock.Mock(return_value=False)
+        return mock_path
+
+    def file_open(path, mode="rt"):
+        # Simulate permission error for cgroup files
+        if path in ("/proc/self/cgroup", "/proc/1/cgroup"):
+            raise PermissionError("Permission denied")
+        if path == "/proc/self/mountinfo":
+            raise PermissionError("Permission denied")
+        raise FileNotFoundError()
+
+    with mock.patch("sys.platform", "linux"), \
+         mock.patch("container_detect.core.Path", side_effect=path_constructor), \
+         mock.patch("builtins.open", side_effect=file_open), \
+         mock.patch.dict(os.environ, {}, clear=True):
+        # Should return False gracefully without raising exception
+        assert is_inside_container(force_refresh=True) is False
+
+
+def test_handles_missing_files_gracefully():
+    """Test that missing files are handled gracefully."""
+    def path_constructor(*args, **kwargs):
+        path_str = str(args[0]) if args else ""
+        mock_path = mock.MagicMock(spec=Path)
+        mock_path.__str__ = mock.Mock(return_value=path_str)
+        mock_path.exists = mock.Mock(return_value=False)
+        return mock_path
+
+    def file_open(path, mode="rt"):
+        # All files are missing
+        raise FileNotFoundError()
+
+    with mock.patch("sys.platform", "linux"), \
+         mock.patch("container_detect.core.Path", side_effect=path_constructor), \
+         mock.patch("builtins.open", side_effect=file_open), \
+         mock.patch.dict(os.environ, {}, clear=True):
+        # Should return False gracefully without raising exception
+        assert is_inside_container(force_refresh=True) is False
+
+
+def test_cgroup_v1_format():
+    """Test detection with cgroup v1 format."""
+    def path_constructor(*args, **kwargs):
+        path_str = str(args[0]) if args else ""
+        mock_path = mock.MagicMock(spec=Path)
+        mock_path.__str__ = mock.Mock(return_value=path_str)
+        mock_path.exists = mock.Mock(return_value=False)
+        return mock_path
+
+    def file_open(path, mode="rt"):
+        if path == "/proc/self/cgroup":
+            # Cgroup v1 format: multiple hierarchies
+            return mock.mock_open(read_data="1:name=systemd:/docker/abc123\n2:cpu:/docker/abc123")(path, mode)
+        raise FileNotFoundError()
+
+    with mock.patch("sys.platform", "linux"), \
+         mock.patch("container_detect.core.Path", side_effect=path_constructor), \
+         mock.patch("builtins.open", side_effect=file_open), \
+         mock.patch.dict(os.environ, {}, clear=True):
+        assert is_inside_container(force_refresh=True) is True
+
+
+def test_cgroup_v2_format():
+    """Test detection with cgroup v2 format."""
+    def path_constructor(*args, **kwargs):
+        path_str = str(args[0]) if args else ""
+        mock_path = mock.MagicMock(spec=Path)
+        mock_path.__str__ = mock.Mock(return_value=path_str)
+        mock_path.exists = mock.Mock(return_value=False)
+        return mock_path
+
+    def file_open(path, mode="rt"):
+        if path == "/proc/self/cgroup":
+            # Cgroup v2 format: 0::/path
+            return mock.mock_open(read_data="0::/kubepods/burstable/pod123/container456")(path, mode)
+        raise FileNotFoundError()
+
+    with mock.patch("sys.platform", "linux"), \
+         mock.patch("container_detect.core.Path", side_effect=path_constructor), \
+         mock.patch("builtins.open", side_effect=file_open), \
+         mock.patch.dict(os.environ, {}, clear=True):
+        assert is_inside_container(force_refresh=True) is True
+
+
+def test_multiple_detection_methods_combination():
+    """Test detection when multiple methods would detect container."""
+    def path_constructor(*args, **kwargs):
+        path_str = str(args[0]) if args else ""
+        mock_path = mock.MagicMock(spec=Path)
+        mock_path.__str__ = mock.Mock(return_value=path_str)
+        # Both dockerenv and containerenv exist
+        mock_path.exists = mock.Mock(return_value=(
+            path_str == "/.dockerenv" or path_str == "/.containerenv"
+        ))
+        return mock_path
+
+    def file_open(path, mode="rt"):
+        if path == "/proc/self/cgroup":
+            return mock.mock_open(read_data="docker")(path, mode)
+        raise FileNotFoundError()
+
+    with mock.patch("sys.platform", "linux"), \
+         mock.patch("container_detect.core.Path", side_effect=path_constructor), \
+         mock.patch("builtins.open", side_effect=file_open), \
+         mock.patch.dict(os.environ, {"DOCKER_CONTAINER": "true"}):
+        # Should detect via first method (container files) and return True
+        assert is_inside_container(force_refresh=True) is True
+
+
+def test_cache_invalidation_with_os_error():
+    """Test cache invalidation when OSError occurs."""
+    from container_detect.core import _is_inside_container_cached
+
+    call_count = 0
+
+    def path_constructor(*args, **kwargs):
+        path_str = str(args[0]) if args else ""
+        mock_path = mock.MagicMock(spec=Path)
+        mock_path.__str__ = mock.Mock(return_value=path_str)
+        mock_path.exists = mock.Mock(return_value=False)
+        return mock_path
+
+    def file_open(path, mode="rt"):
+        nonlocal call_count
+        call_count += 1
+        # First call raises OSError, second call succeeds
+        if call_count == 1:
+            raise OSError("I/O error")
+        if path == "/proc/self/cgroup":
+            return mock.mock_open(read_data="docker")(path, mode)
+        raise FileNotFoundError()
+
+    with mock.patch("sys.platform", "linux"), \
+         mock.patch("container_detect.core.Path", side_effect=path_constructor), \
+         mock.patch("builtins.open", side_effect=file_open), \
+         mock.patch.dict(os.environ, {}, clear=True):
+        _is_inside_container_cached.cache_clear()
+
+        # First call - OSError should be handled, returns False
+        result1 = is_inside_container(force_refresh=True)
+        assert result1 is False
+
+        # Second call with force_refresh - should retry and succeed
+        result2 = is_inside_container(force_refresh=True)
+        assert result2 is True
+
+
+def test_partial_cgroup_file_access():
+    """Test when one cgroup file is accessible but other is not."""
+    def path_constructor(*args, **kwargs):
+        path_str = str(args[0]) if args else ""
+        mock_path = mock.MagicMock(spec=Path)
+        mock_path.__str__ = mock.Mock(return_value=path_str)
+        mock_path.exists = mock.Mock(return_value=False)
+        return mock_path
+
+    def file_open(path, mode="rt"):
+        if path == "/proc/self/cgroup":
+            raise PermissionError("Permission denied")
+        if path == "/proc/1/cgroup":
+            return mock.mock_open(read_data="kubepods")(path, mode)
+        raise FileNotFoundError()
+
+    with mock.patch("sys.platform", "linux"), \
+         mock.patch("container_detect.core.Path", side_effect=path_constructor), \
+         mock.patch("builtins.open", side_effect=file_open), \
+         mock.patch.dict(os.environ, {}, clear=True):
+        # Should detect via second cgroup file even though first failed
+        assert is_inside_container(force_refresh=True) is True
+
+
+def test_empty_cgroup_file():
+    """Test handling of empty cgroup file."""
+    def path_constructor(*args, **kwargs):
+        path_str = str(args[0]) if args else ""
+        mock_path = mock.MagicMock(spec=Path)
+        mock_path.__str__ = mock.Mock(return_value=path_str)
+        mock_path.exists = mock.Mock(return_value=False)
+        return mock_path
+
+    def file_open(path, mode="rt"):
+        if path == "/proc/self/cgroup":
+            return mock.mock_open(read_data="")(path, mode)  # Empty file
+        raise FileNotFoundError()
+
+    with mock.patch("sys.platform", "linux"), \
+         mock.patch("container_detect.core.Path", side_effect=path_constructor), \
+         mock.patch("builtins.open", side_effect=file_open), \
+         mock.patch.dict(os.environ, {}, clear=True):
+        # Should return False when cgroup file is empty
+        assert is_inside_container(force_refresh=True) is False
+
+
+def test_case_insensitive_cgroup_keywords():
+    """Test that cgroup keywords are matched case-insensitively."""
+    def path_constructor(*args, **kwargs):
+        path_str = str(args[0]) if args else ""
+        mock_path = mock.MagicMock(spec=Path)
+        mock_path.__str__ = mock.Mock(return_value=path_str)
+        mock_path.exists = mock.Mock(return_value=False)
+        return mock_path
+
+    def file_open(path, mode="rt"):
+        if path == "/proc/self/cgroup":
+            # Uppercase keyword should still match
+            return mock.mock_open(read_data="DOCKER")(path, mode)
+        raise FileNotFoundError()
+
+    with mock.patch("sys.platform", "linux"), \
+         mock.patch("container_detect.core.Path", side_effect=path_constructor), \
+         mock.patch("builtins.open", side_effect=file_open), \
+         mock.patch.dict(os.environ, {}, clear=True):
+        assert is_inside_container(force_refresh=True) is True
