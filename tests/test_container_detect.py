@@ -235,6 +235,13 @@ def test_caching_works_correctly():
     stat_call_count = 0
     read_call_count = 0
 
+    def file_open(path, mode="rt"):
+        nonlocal read_call_count
+        read_call_count += 1
+        if path == "/proc/self/cgroup":
+            return mock.mock_open(read_data="xxx docker yyyy")(path, mode)
+        raise FileNotFoundError()
+
     def path_constructor(*args, **kwargs):
         path_str = str(args[0]) if args else ""
         mock_path = mock.MagicMock(spec=Path)
@@ -244,13 +251,6 @@ def test_caching_works_correctly():
             nonlocal stat_call_count
             stat_call_count += 1
             return False
-
-        def file_open(path, mode="rt"):
-            nonlocal read_call_count
-            read_call_count += 1
-            if path == "/proc/self/cgroup":
-                return mock.mock_open(read_data="xxx docker yyyy")(path, mode)
-            raise FileNotFoundError()
 
         mock_path.exists = mock.Mock(side_effect=exists)
         return mock_path
