@@ -1,4 +1,3 @@
-"""Tests for container_detect package."""
 from pathlib import Path
 from unittest import mock
 import os
