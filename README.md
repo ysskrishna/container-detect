@@ -68,6 +68,36 @@ is_inside_container(force_refresh=True)  # Performs new detection
 
 
 
+## API Reference
+
+Install with `pip install container-detect` and import from `container_detect`. Signatures and descriptions below match the source code of `container_detect`.
+
+### `is_inside_container(force_refresh: bool = False) -> bool`
+
+Return True if the current process is running inside a container.
+
+Detects multiple container types including Docker, Podman, Kubernetes,
+containerd, LXC, and others.
+
+Linux-only detection. Returns False on macOS and Windows.
+
+**Parameters**
+
+- `force_refresh`: If True, bypass the cache and perform a fresh check. Defaults to False.
+
+**Returns**
+
+- True if running inside a container, False otherwise.
+
+**Example**
+
+```python
+from container_detect import is_inside_container
+
+is_inside_container()  # False  (Uses cache)
+is_inside_container(force_refresh=True)  # False  (Bypasses cache)
+```
+
 ## Credits
 
 This package is inspired by the [is-inside-container](https://github.com/sindresorhus/is-inside-container) ([npm](https://www.npmjs.com/package/is-inside-container)) npm package by [Sindre Sorhus](https://github.com/sindresorhus).
