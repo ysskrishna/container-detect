@@ -5,6 +5,8 @@
 ![Tests](https://github.com/ysskrishna/container-detect/actions/workflows/test.yml/badge.svg)
 [![PyPI](https://img.shields.io/pypi/v/container-detect)](https://pypi.org/project/container-detect/)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/container-detect?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=BLUE&left_text=downloads)](https://pepy.tech/projects/container-detect)
+[![Context7](https://img.shields.io/badge/Context7-docs-18181B)](https://context7.com/ysskrishna/container-detect)
+[![Ask DeepWiki](https://img.shields.io/badge/DeepWiki-ask-18181B)](https://deepwiki.com/ysskrishna/container-detect)
 
 Detect if your Python process is running inside a container. Supports Docker, Podman, Kubernetes, containerd, LXC, and more. Inspired by the popular [is-inside-container](https://github.com/sindresorhus/is-inside-container) npm package. Supports cached results with optional refresh.
 
