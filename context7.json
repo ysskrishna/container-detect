@@ -1,0 +1,29 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "container-detect",
+  "description": "Zero-dependency Python library that detects whether the current process runs inside a container (Docker, Podman, Kubernetes, containerd, LXC and others) on Linux, with a cached result. Python port of the is-inside-container npm package.",
+  "excludeFolders": [
+    "archive",
+    "archived",
+    "old",
+    "deprecated",
+    "legacy",
+    "tests",
+    ".github"
+  ],
+  "excludeFiles": [
+    "CHANGELOG.md",
+    "changelog.md",
+    "LICENSE.md",
+    "license.md",
+    "CODE_OF_CONDUCT.md",
+    "NEWS.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "AGENTS.md"
+  ],
+  "rules": [
+    "Import is_inside_container from container_detect. It always returns False on macOS and Windows.",
+    "The result is cached; call is_inside_container(force_refresh=True) to check again."
+  ]
+}
